@@ -1,4 +1,4 @@
-#############################################################
+#########################################################################
 #                                                                       #
 # This routine will take alpha-omega data that has been                 #
 # converted to matlab format and convert it to a python                 #
@@ -35,7 +35,7 @@
 # The start_end function determines the star and end of the movement by #
 # determining the start of the movement from either the EMG signal or   #
 # the accelerometer signal. The actual variable name is passed to this  #
-# function through the vars input variable.
+# function through the vars input variable.                             #
 #                                                                       #
 #                                                                       #
 #                                                                       #
@@ -73,6 +73,8 @@
 import math
 from operator import truediv
 
+import time
+
 import scipy.io as sio
 from scipy import signal
 import matplotlib.pyplot as plt
@@ -82,17 +84,18 @@ import os
 from matplotlib.cbook import flatten
 from tensorpac import Pac, EventRelatedPac, PreferredPhase
 from tensorpac.utils import PeakLockedTF, PSD, ITC, BinAmplitude
-from tensorpac.signals import pac_signals_wavelet
+
 
 # Get a list of all the mat files in the directory path
 
 # directory_path = input(r"Input a directory path:")
-directory_path = r'C:\Users\biost\Desktop\Desktop 05212024\Kazuki Data\Rojas\Rojas_LBrain_RBody'
-
-
+directory_path = r'C:\Users\biost\Desktop\Desktop 05212024\Kazuki Data\Gaubatz_Michael\Gaubatz_LBrain_RBody'
 
 # file_extension = input(r"Input a file extension (.xxx): ")
 file_extension = '.mat'
+
+#variable_list = input(r'Enter the variable list file (*.txt)')
+variable_list = 'v.txt'
 
 # Get all the mat file names so they can be combined
 def get_mat_files(directory_path, file_extension):
@@ -109,28 +112,25 @@ def combine_variables(directory_path, mat_files, variable):
       print('Combining the files to one long data stream')
       print(variable)
       accl = [0]
-      sf = []
+      sfcv = []
       # print(variable)
       for dp in mat_files:
             dir_path = fr"{directory_path}\{dp}"
             main_mat = sio.loadmat(dir_path)
             hold = main_mat[variable]
             accl.extend(hold.flatten())
-      sf = (main_mat[variable + '_KHz'] * 1000.0).flatten()
-            #sf.extend((main_mat[variable + '_KHz'] * 1000.0).flatten())
-      #print(f"sf:{sf}")
-      return accl, sf
+      sfcv = (main_mat[variable + '_KHz'] * 1000.0).flatten()
+      return accl, sfcv
 
 # Get the specific variable names from a file that will be analyzed
-def get_variable_names():
+def get_variable_names(variable_list):
       print('Get Variable Names')
       vars=[]
 
       # Ask the user to enter the file with the variable list in it
       # variable list is a test case
       # Get the list of variables that are going to be analyzed
-      #variable_list = input(r'Enter the variable list file (*.txt)')
-      variable_list = 'v.txt'
+
 
       # variable_list = input('Enter the file that contains the variable names: ')
 
@@ -138,15 +138,14 @@ def get_variable_names():
       for line in file:
             vars.append(line.strip())
       file.close()
-      #print(vars)
       # vars is a list of the variable names
       return vars
 
 
 def modify_var_names(vars):
-      print('Modify Variable Names - create a dictionary')
-      #print('key=combine names:vale=string of values')
-      #print('Key=sf: values=sampfreq')
+      # Create a dictionary to hold all the combined data and then
+      # another dictionary to hold the sample rate data.
+      print('Modify Variable Names - create a dictionary holding each variable name and then the data')
       combined = {}
       samp_freq = {}
 
@@ -159,57 +158,75 @@ def modify_var_names(vars):
       #print(f"samp_freq:{samp_freq}")
       return combined, samp_freq
 
-      # print(combined.keys())
+#def print_greater_than_x(data, x):
+#    # Prints numbers greater than x and their indices in a list.
 
-def print_greater_than_x(data, x):
-    # Prints numbers greater than x and their indices in a list.
-
-    for index, number in enumerate(data):
-        if number > x:
-            print(f"Number: {number}, Index: {index}")
+#    for index, number in enumerate(data):
+#        if number > x:
+#            print(f"Number: {number}, Index: {index}")
 
 
-def start_end(vars, combined, samp_freq):
+def start_end(vars, combined, samp_freq, sensitivity):
+# Calculate the start and end times for each trial based on the trigger being
+# either the accl or EMG start point. Go 2 sec before and 2 sec after so the full
+# data will be 2 sec before, 2 second of movement, and 2 sec after.
 
-# Get the average value of the accl variable
+# Get the average value of the accl or EMG variable
 
       # accl, sf = combine_variables(directory_path, mat_files, variable)
 #      for i in range(len(combined)):
       l = [0]
       for i in range(len(l)):
             #print(f"vars: {vars}")
-            print('Set time axis')
-            print(f'combine: {vars}')
+            #print('Set time axis')
+            #print(f'combine: {vars}')
             accl = combined[vars + '_combine']
 
             # Rectify and square of values greater than 250
-
-            print("Rectify and Normalizing Data")
+            print(f"Rectify and Normalizing {vars} data.")
 
             abs_val = np.absolute(accl)
             abs_val_hold = abs_val
             abs_val_mean = np.mean(abs_val)
             abs_val = abs_val - abs_val_mean
-            print(f"abs_val_mean: {abs_val_mean}")
 
-            #times = np.arange(len(abs_val)) * 1 / samp_freq
-            #x1 = times
+            print(f'Sensitivity {sensitivity}')
 
-            #plt.title(f"{vars} data abs_val")
-            #plt.plot(x1, abs_val)
-            #plt.show()
+            #k = 0
+            j = 0
+            while j < len(abs_val):
+                  if abs_val[j] > sensitivity:
+                        abs_val[j] = 100000.0
 
+                        #k = k + 1
+                        #print(f'k: {k}')
 
-
-            for j in range(len(abs_val)):
-                  #if abs_val[j] > 1000.0:
-                  if abs_val[j] > 200.0:
-                        abs_val[j] = 10000.0
+                        j = j + int((4 * samp_freq))
+                        if j >= len(abs_val):
+                              break
+                        abs_val[j] = 0.0
                   else:
                         abs_val[j] = 0.0
+                        j = j + 1
+
+            while j < len(abs_val):
+                  if abs_val[j] < 100000.0:
+                        abs_val[j] = 0.0
+                  j = j + 1
+
+
+
+
+            ###for j in range(len(abs_val)):
+            ####      #if abs_val[j] > 1000.0:
+            ###      if abs_val[j] > sensitivity:
+            ###            abs_val[j] = 10000.0
+            ###      else:
+            ###            abs_val[j] = 0.0
 
             # Get the start and end times of each motor movement
-            print("Get the start and end times of each motor movement from the accl variable")
+            print(f"Get the start and end times of each motor movement from the index variable "
+                  f"{vars}")
             ts_times = []
             te_times = []
             flag = 1
@@ -220,29 +237,18 @@ def start_end(vars, combined, samp_freq):
                   # Need this break in case the index j gets to big, and we get an index error
                   if j >= len(abs_val):
                         break
-                  if abs_val[j] == 10000.0 and flag == 1:
-                        #ts_times.append(j / samp_freq[vars])
+                  if abs_val[j] == 100000.0 and flag == 1:
                         ts_times.append(j / samp_freq)
-                        flag = 0
-                        # Add 3 times the sample rate to the start point to get the full EMG signal - note there
-                        # are 5 seconds between movements so 3 sample rates is 3 seconds.
-                        j = j + int((3 * samp_freq[0]))
+                        # Add 4 times the sample rate to the start point to get the full EMG
+                        # signal - note there
+                        # are 5 seconds between movements so 4 sample rates is 4 seconds.
+                        j = j + int((4 * samp_freq[0]))
                         num_trials += 1
-                  elif abs_val[j] == 0.0 and flag == 0:
                         te_times.append(j / samp_freq)
-                        flag = 1
-                        j = j + 1
 
-            print(f'num_trials: {num_trials}')
-            #print(f'Length of ts_times: {len(ts_times)}')
-            #print(f'Length of te_times: {len(te_times)}')
-            #print(f'ts_times: {ts_times}')
-            #ts_times = ts
-            #te_times = te
+            #print(f'num_trials: {num_trials}')
             ts_samples = ts_times * samp_freq
             te_samples = te_times * samp_freq
-            #print(f'ts_samples: {ts_samples}')
-
 
             # Create a x-axis for the time plot
             times = np.arange(len(abs_val)) * 1 / samp_freq
@@ -260,9 +266,9 @@ def start_end(vars, combined, samp_freq):
             plt.plot(x1, abs_val_hold)
             plt.show()
 
-
-            # Plot accl in the time and frequency domains
-            print('Plot')
+            # Plot accl (which is either the accl or EMG data depending on what is being
+            # used as the trigger in the time and frequency domains
+            #print('Plot')
 
             j = 0
 
@@ -272,57 +278,41 @@ def start_end(vars, combined, samp_freq):
 
             yavg = np.zeros(hold)
             while j < num_trials - 1:
-                  #hold0s = (ts[j] * samp_freq[vars[i]]) - (samp_freq[vars[i]])
                   hold0e = (te_times[j] * samp_freq) + (samp_freq)
-
                   hold0s = (ts_times[j] * samp_freq)
-
 
                   hold0s = int(hold0s[0])
                   hold0e = int(hold0e[0])
 
-
-                  #print(j)
-
                   # Rectify the values
-
-                  #y1 = np.absolute(accl[hold0s:hold0e])
                   yy1 = np.absolute(accl[hold0s:hold0e])
 
                   # Check to make sure the array size are the
                   # same and if not then adjust the last values of that array
-
                   if len(yy1) < len(yavg):
                         sub = (abs(len(yy1) - len(yavg)))
                         yhold = np.zeros(sub)
                         yy1 = np.append(yy1, yhold)
-
                   elif len(yy1) > len(yavg):
-
                         sub = (abs(len(yy1) - len(yavg))) * -1
-
                         yy1 = yy1[:sub]
-
                   yavg = yavg + yy1
 
-                  #x1 = times[hold0s:hold0e]
                   x1 = times[(hold0s - int(2 * samp_freq[0])):hold0e]
-                  y1 = np.absolute(accl[(hold0s - int(2 * samp_freq[0])):hold0e])
+                  #y1 = np.absolute(accl[(hold0s - int(2 * samp_freq[0])):hold0e])
 
                   ##print(f'Plot the segmented data for trial {j}.')
 
                   ##plt.subplot(211)
-                  ##plt.title(f"Accl data for trial: {j}")
+                  ##plt.title(f"accl data for trial: {j}")
                   ##plt.plot(x1, y1)
                   ##plt.show()
 
                   j = j + 1
-
       yavg = yavg / num_trials
 
       # Check to make sure the array size are the
       # same and if not then adjust the last values of that array
-
       if len(yavg) < len(x1):
             sub = (abs(len(yavg) - len(x1)))
             yhold = np.zeros(sub)
@@ -338,20 +328,23 @@ def start_end(vars, combined, samp_freq):
       plt.psd(yavg, NFFT=1024, Fs=samp_freq)
       plt.show()
 
+      print(f'len of ts_samples: {len(ts_samples)}')
+      print(f'len of ts_times: {len(ts_times)}')
+
+
       return yavg, hold0s, hold0e, ts_times, te_times, ts_samples, te_samples
 
 
 
 def segment_data_variable(variable, accl_start_samples, sf_accl, sf):
-      # Segment the specific variable according to the start times of the accl movmemnt
-      #print(f'len(variable): {len(variable)}')
-      #print(f'accl_start_samples: {accl_start_samples}')
+      # Segment the specific variable according to the start times of the accl or EMG movement
       # Segment the data to the following:
       #     2 sec before the movement
       #     2 sec during the movement
       #     2 sec after the movement
 
-      # First convert the start times from the Accl variable to the appropriate sample points
+      # First convert the start times from the Accl variable to the appropriate sample points since sample rates
+      # are different between variables.
       # vst = variable start times
       #                        (Accl_Start_time)*(Variable_Sample_rate)
       #  Variable_Start_time = -------------------------------------------
@@ -371,19 +364,6 @@ def segment_data_variable(variable, accl_start_samples, sf_accl, sf):
                                                        (2 * int(sf[0] * 2)) - 1)]
           all[i] = variable[(int(vst[i]) - int(sf[0] * 2)):(int(vst[i]) +
                                                       (2 * int(sf[0] * 2)) - 1)]
-          #print(f'i:{i}')
-          #print(f'Len of all[i]: {len(all[i])}')
-          #plt.title(f"all[i]")
-          #plt.plot(all[i])
-          #plt.show()
-
-      #print(f"Keys before: {before.keys()}")
-      #print(f"Keys during: {during.keys()}")
-      #print(f"Keys after: {after.keys()}")
-      #print(f'len(all[1]): {len(all[1])}')
-      #print(f'len(before[1]): {len(before[1])}')
-      #print(f'len(during[1]): {len(during[1])}')
-      #print(f'len(after[1]): {len(after[1])}')
       return(all, before, during, after)
 
 
@@ -402,35 +382,26 @@ def add_motor_condition(y_text, fontsize=14, color='k', ax=None):
 def get_avg_seg_variables(data, noe, sf, vars):
       # Calculate the average value for all the variables.
 
-      #print(f'len(data[1]): {len(data[1])}')
-      #print(f'len data: {len(data)}')
-
       total = np.zeros(len(data[1]))
-      #print(f'len(total) after np.zeros: {len(total)}')
+
+      #total = data - np.mean(data)
+
       for i in range(noe - 1):
             # Sum up all the data in the various epochs
             result = []
             for j in range(len(data[i])):
                   result.append(total[j] + data[i][j])
-            #print(f'len(result): {len(result)}')
             total = result
       # Divide each value in the total by the number of epochs to get the average
       total = np.divide(total, noe)
-
-      #print(f'len(total): {len(total)}')
 
       # Find the maximum amplitude of the data for placement of the text
       # pre/movement/post in the graph
       max_amplitude = max(total)
 
-      #print(f'len(total): {len(total)}')
-
       x = []
-      #print(f'sf: {sf}')
       for j in range(len(total)):
-            x.append((j / sf) - 2.0)
-            #if j == 1376:
-                  #print(f'x[j]: {x[j]}')
+            x.append((j / sf) - 2.0) # The -2.0 is so time starts at 2 sec before the movement.
 
       print(f'Segmented data average for: {vars}')
 
@@ -485,13 +456,15 @@ def calcualte_PSD(data, sf, noe, hold2, k):
 
 def line_filter(variable, sf, line):
 
+      # Remove 60 Hz and the DC offset from the signals.
+
       # First subtract out the DC component
-      sumt = (sum(variable))
-      total = np.absolute(sumt)
-      print(f'total: {total}')
-      length = len(variable)
-      mean = total / length
-      variable = variable - mean
+      #sumt = (sum(variable))
+      #total = np.absolute(sumt)
+      #print(f'total: {total}')
+      #length = len(variable)
+      #mean = total / length
+      variable = variable - np.mean(variable)
 
       f0 = line
       Q = 20.0
@@ -507,22 +480,29 @@ def citaf(data, noe, hold2):
             # data[number of epochs][values]
       # tp_array is the array in tensorpac format
 
+      #print(f'keys of data: {data.keys()}')
+
       print(f'Converting data to a format tensorpac needs for variable: {hold2}')
 
       tp_array = np.zeros((noe, len(data[0])))
 
+      #print(f'tp_array shape: {tp_array.shape}')
+      #print(f'data shape: {data[29].shape}')
+      #print(f'noe: {noe}')
+
       for i in range(noe):
-            for j in range(len(data[0])):
+            #print(f'i:{i}')
+            for j in range(len(data[i])):
                   tp_array[i, j] = data[i][j]
 
       return tp_array
-
-
 
 def calcualte_bispectra(x, y, z, sf, noe, hold2, k):
       # noe = Number of Epochs
       # x, y, and z are the three data variables - they can all be the same or
       #   different depending on if you want to do a cross spectra
+
+      tbstart = time.time()
 
       global x_fft_result, y_fft_result, z_fft_result
       print(f'Calculating the bispectrum/bi-phase/bicoherance for variable {hold2}')
@@ -609,14 +589,14 @@ def calcualte_bispectra(x, y, z, sf, noe, hold2, k):
       bisp_mag = np.absolute(bisp) / (noe + (int(len(x[1]) / sample_freq)))
       bisp_phase = np.angle(bisp) / (noe + (int(len(x[1]) / sample_freq)))
 
-      print(f'bisp_mag[100, 100]: {bisp_mag[100, 100]}')
+      #print(f'bisp_mag[100, 100]: {bisp_mag[100, 100]}')
 
       # Calculate the bicoherence
       sum3 = ((sum1 / (noe + (int(len(x[1]) / sample_freq)))) *
               (sum2 / (noe + (int(len(x[1]) / sample_freq)))))
       bic = bisp_mag / np.sqrt(sum3)
 
-      print(f'sum3[100, 100]: {sum3[100, 100]}')
+      #print(f'sum3[100, 100]: {sum3[100, 100]}')
 
       # significance value is from table 3.5 in JLS thesis
       sig = 2.131 / np.sqrt((noe + (int(len(x[1]) / sample_freq))))
@@ -660,55 +640,27 @@ def calcualte_bispectra(x, y, z, sf, noe, hold2, k):
       plt.title(f"Bcoherance of: {hold2}")
 
 
-      plt.contour(frequency, frequency, bic, levels=np.linspace(0, 1, 25), cmap='viridis')
+      plt.contourf(frequency, frequency, bic, levels=np.linspace(0, 1, 25), cmap='viridis')
       plt.colorbar()
       plt.ylim(0, 80)
       plt.xlim(0, 80)
       #plt.grid(True)
       plt.show()
 
+      print(f'Bispectral running time in seconds = {time.time() - tbstart}')
+
       return bisp_mag, bisp_phase, bic
 
-def erpac_sub (data, sf, time, v_text):
-      #psd = PSD(data, sf)
+def erpac_sub (data, sf, time_x, v_text):
 
-      #plt.subplot(1, 2, 1)
-      #ax = psd.plot(confidence=95, f_min=5, f_max=100, log=True, grid=True)
-      #ax = psd.plot(confidence=95, f_min=5, f_max=30, grid=True)
-      #plt.axvline(8, lw=2, color='red')
-      #plt.axvline(12, lw=2, color='red')
-      # adding the single trial PSD
-      #plt.subplot(1, 2, 2)
-      #psd.plot_st_psd(cmap='Greys', f_min=2, f_max=30, vmax=500, vmin=0.,
-       #               grid=True)
-      #plt.axvline(8, lw=2, color='red')
-      #plt.axvline(12, lw=2, color='red')
-      #plt.tight_layout()
-      #plt.show()
-
-
-
-
-
-
-      # The test code comes from the following web-page
-      # https://etiennecmb.github.io/tensorpac/auto_examples/erpac/
-      # plot_erpac.html#sphx-glr-auto-examples-erpac-plot-erpac-py
-      # Test Data
-      # First signal consisting of a one second 10 <-> 100hz coupling
-      #n_epochs = 300
-      #n_times = 1000
-      #sf = 1000.
-      #x1, tvec = pac_signals_wavelet(f_pha=10, f_amp=100, n_epochs=n_epochs, noise=2,
-       #                             n_times=n_times, sf=sf)
-
-      # Second signal : one second of random noise
-      #x2 = np.random.rand(n_epochs, 1000)
-
-      # now, concatenate the two signals across the time axis
-      #x = np.concatenate((x1, x2), axis=1)
-      #time = np.arange(x.shape[1]) / sf
-
+      #################################################
+      #                                               #
+      # The code below are modified from examples     #
+      # taken from:                                   #
+      # https://etiennecmb.github.io/tensorpac        #
+      # /auto_examples/tuto/plot_real_data.html       #
+      #                                               #
+      #################################################
 
       print(f'Calculating ERPAC for variable: {v_text}')
 
@@ -720,10 +672,6 @@ def erpac_sub (data, sf, time, v_text):
       pha = p.filter(sf, data, ftype='phase', n_jobs=1)
       amp = p.filter(sf, data, ftype='amplitude', n_jobs=1)
 
-
-      # Test trials
-      #pha = p.filter(sf, x, ftype='phase', n_jobs=1)
-      #amp = p.filter(sf, x, ftype='amplitude', n_jobs=1)
       ###############################################################################
       # Compute the ERPAC using the two implemented methods and plot it
       ###############################################################################
@@ -740,7 +688,7 @@ def erpac_sub (data, sf, time, v_text):
 
             # plot
             plt.subplot(len(methods), 1, n_m + 1)
-            p.pacplot(erpac, time, p.yvec, xlabel='Time (second)' * n_m,
+            p.pacplot(erpac, time_x, p.yvec, xlabel='Time (second)' * n_m,
                       cmap='Spectral_r', ylabel='Amplitude frequency', title=p.method + v_text,
                       cblabel='ERPAC', vmin=0., rmaxis=True, polar=False)
             plt.axvline(0.0, linestyle='--', color='r', linewidth=2)
@@ -749,18 +697,19 @@ def erpac_sub (data, sf, time, v_text):
       plt.tight_layout()
       p.show()
 
-      print(f'Plotting Inter-Trials Coherence for variable: {v_text}')
+      print(f'Plotting the Inter-trial Coherence for: {v_text}')
 
       itc = ITC(data, sf, f_pha=(8, 30, 2, 0.2))
-      itc.plot(times=time, cmap='plasma', fz_labels=15, fz_title=18)
+      itc.plot(times=time_x, cmap='plasma', fz_labels=15, fz_title=10)
       add_motor_condition(18, color='white')
+      plt.suptitle(f'{v_text}')
       plt.show()
 
       print(f'Plotting ERPPAC for alpha-phase for variable: {v_text}')
 
       rp_obj = EventRelatedPac(f_pha=[8, 12], f_amp=(30, 160, 30, 2))
       erpac = rp_obj.filterfit(sf, data, method='gc', smooth=100)
-      rp_obj.pacplot(erpac.squeeze(), time, rp_obj.yvec, xlabel='Time (seconds)',
+      rp_obj.pacplot(erpac.squeeze(), time_x, rp_obj.yvec, xlabel='Time (seconds)',
                      ylabel='Amplitude frequency (Hz)',
                      title='Event-Related PAC occurring for alpha phase for' + v_text,
                      fz_labels=15, fz_title=8)
@@ -771,7 +720,7 @@ def erpac_sub (data, sf, time, v_text):
 
       rp_obj = EventRelatedPac(f_pha=[13, 30], f_amp=(30, 160, 30, 2))
       erpac = rp_obj.filterfit(sf, data, method='gc', smooth=100)
-      rp_obj.pacplot(erpac.squeeze(), time, rp_obj.yvec, xlabel='Time (seconds)',
+      rp_obj.pacplot(erpac.squeeze(), time_x, rp_obj.yvec, xlabel='Time (seconds)',
                      ylabel='Amplitude frequency (Hz)',
                      title='Event-Related PAC occurring for beta phase for' + v_text,
                      fz_labels=15, fz_title=8)
@@ -782,13 +731,13 @@ def erpac_sub (data, sf, time, v_text):
       print(f'Plotting the PAC for the three times in movement for: {v_text}')
 
       p_obj = Pac(idpac=(6, 0, 0), f_pha=(8, 30, 4, .2), f_amp=(60, 200, 20, 2))
-      # extract all of the phases and amplitudes
+      # extract all the phases and amplitudes
       pha_p = p_obj.filter(sf, data, ftype='phase')
       amp_p = p_obj.filter(sf, data, ftype='amplitude')
       # define time indices where rest, planning and execution are defined
-      time_rest = slice(0, 2750)
-      time_prep = slice(2750, 5500)
-      time_exec = slice(5500, 8250)
+      time_rest = slice(0, int(sf * 2))
+      time_prep = slice(int(sf * 2), int(sf * 4))
+      time_exec = slice(int(sf * 4), int(sf * 6))
       # define phase / amplitude during rest / planning / execution
       pha_rest, amp_rest = pha_p[..., time_rest], amp_p[..., time_rest]
       pha_prep, amp_prep = pha_p[..., time_prep], amp_p[..., time_prep]
@@ -801,6 +750,7 @@ def erpac_sub (data, sf, time, v_text):
       vmax = np.max([pac_rest.max(), pac_prep.max(), pac_exec.max()])
       kw = dict(vmax=vmax, vmin=.04, cmap='viridis')
       plt.figure(figsize=(14, 4))
+      plt.suptitle(f'PAC for the three movement times for: {v_text}')
       plt.subplot(131)
       p_obj.comodulogram(pac_rest, title="PAC Pre-Movement [-2, 0]s", **kw)
       plt.subplot(132)
@@ -809,15 +759,42 @@ def erpac_sub (data, sf, time, v_text):
       plt.subplot(133)
       p_obj.comodulogram(pac_exec, title="PAC Post Movement [2, 4]s", **kw)
       plt.ylabel('')
-      #plt.tight_layout()
+      plt.tight_layout()
       plt.suptitle(v_text)
       plt.show()
 
-      print(f'Align time-frequency map for: {v_text}')
+      #########################################################################
+      #                                                                       #
+      #                                                                       #
+      # To align time-frequency maps in Python, techniques often involve      #
+      # adjusting the time or frequency axes to match a reference or to       #
+      # compensate for variations. Here's a breakdown of common methods:      #
+      # Peak-locking                                                          #
+      # If the time-frequency maps are related to events with specific        #
+      # peaks, aligning them to the peak time can be effective.               #
+      #                                                                       #
+      #                                                                       #
+      #########################################################################
 
-      peak = PeakLockedTF(data, sf, 0., times=time, f_pha=[8, 12],
+
+      print(f'Align time-frequency map for (alpha phase): {v_text}')
+
+      peak = PeakLockedTF(data, sf, 0., times=time_x, f_pha=[8, 12],
                           f_amp=(5, 160, 30, 2))
       plt.figure(figsize=(8, 8))
+      plt.suptitle(f'Align time-frequency map for (alpha phase): {v_text}')
+      ax_1, ax_2 = peak.plot(zscore=True, baseline=(250, 750), cmap='Spectral_r',
+                             vmin=-1, vmax=2)
+      add_motor_condition(135, color='black', ax=ax_1)
+      plt.tight_layout()
+      plt.show()
+
+      print(f'Align time-frequency map for (beta phase): {v_text}')
+
+      peak = PeakLockedTF(data, sf, 0., times=time_x, f_pha=[13, 30],
+                          f_amp=(5, 160, 30, 2))
+      plt.figure(figsize=(8, 8))
+      plt.suptitle(f'Align time-frequency map for (beta phase): {v_text}')
       ax_1, ax_2 = peak.plot(zscore=True, baseline=(250, 750), cmap='Spectral_r',
                              vmin=-1, vmax=2)
       add_motor_condition(135, color='black', ax=ax_1)
@@ -825,17 +802,142 @@ def erpac_sub (data, sf, time, v_text):
       plt.show()
 
 
+      print(f'Binning gamma amplitude according to alpha for: {v_text}')
+
+      # define phase and amplitude filtering properties
+      kw_filt = dict(f_pha=[8, 12], f_amp=[75, 105], n_bins=20)
+      # bin the rest, planning and execution periods. Note that ideally, the entire
+      # trial should be filtered and then binning should be performed
+      bin_rest = BinAmplitude(data[:, time_rest], sf, **kw_filt)
+      bin_prep = BinAmplitude(data[:, time_prep], sf, **kw_filt)
+      bin_exec = BinAmplitude(data[:, time_exec], sf, **kw_filt)
+
+      plt.figure(figsize=(16, 5))
+      plt.suptitle(f'Binning gamma amplitude according to alpha for: {v_text}')
+      # bin rest period
+      plt.subplot(1, 3, 1)
+      bin_rest.plot(normalize=True, color='gray', unit='deg')
+      plt.ylim(0.5, 1.2), plt.title("Pre", fontsize=18)
+      # bin planning period
+      plt.subplot(1, 3, 2)
+      bin_prep.plot(normalize=True, unit='deg')
+      plt.ylim(0.5, 1.2), plt.ylabel(''), plt.title("Movement", fontsize=18)
+      # bin execution period
+      plt.subplot(1, 3, 3)
+      bin_exec.plot(normalize=True, color='red', unit='deg')
+      plt.ylim(0.5, 1.2), plt.ylabel(''), plt.title("Post", fontsize=18)
+      plt.tight_layout()
+      plt.show()
+
+      print(f'Binning gamma amplitude according to beta for: {v_text}')
+
+      # define phase and amplitude filtering properties
+      kw_filt = dict(f_pha=[13, 30], f_amp=[75, 105], n_bins=20)
+      # bin the rest, planning and execution periods. Note that ideally, the entire
+      # trial should be filtered and then binning should be performed
+      bin_rest = BinAmplitude(data[:, time_rest], sf, **kw_filt)
+      bin_prep = BinAmplitude(data[:, time_prep], sf, **kw_filt)
+      bin_exec = BinAmplitude(data[:, time_exec], sf, **kw_filt)
+
+      plt.figure(figsize=(16, 5))
+      plt.suptitle(f'Binning gamma amplitude according to beta for: {v_text}')
+      # bin rest period
+      plt.subplot(1, 3, 1)
+      bin_rest.plot(normalize=True, color='gray', unit='deg')
+      plt.ylim(0.5, 1.2), plt.title("Pre", fontsize=18)
+      # bin planning period
+      plt.subplot(1, 3, 2)
+      bin_prep.plot(normalize=True, unit='deg')
+      plt.ylim(0.5, 1.2), plt.ylabel(''), plt.title("Movement", fontsize=18)
+      # bin execution period
+      plt.subplot(1, 3, 3)
+      bin_exec.plot(normalize=True, color='red', unit='deg')
+      plt.ylim(0.5, 1.2), plt.ylabel(''), plt.title("Post", fontsize=18)
+      plt.tight_layout()
+      plt.show()
+
+
+      print(f'Identifying the preferred alpha phase for: {v_text}')
+      # define the preferred phase object
+      pp_obj = PreferredPhase(f_pha=[8, 12])
+      # only extract the alpha phase
+      pp_pha = pp_obj.filter(sf, data, ftype='phase')
+      pp_pha_rest = pp_pha[..., time_rest]
+      pp_pha_prep = pp_pha[..., time_prep]
+      pp_pha_exec = pp_pha[..., time_exec]
+      # compute the preferred phase (reuse the amplitude computed above)
+      ampbin_rest, _, vecbin = pp_obj.fit(pp_pha_rest, amp_rest, n_bins=72)
+      ampbin_prep, _, vecbin = pp_obj.fit(pp_pha_prep, amp_prep, n_bins=72)
+      ampbin_exec, _, vecbin = pp_obj.fit(pp_pha_exec, amp_exec, n_bins=72)
+      # mean binned amplitude across trials
+      ampbin_rest = np.squeeze(ampbin_rest).mean(-1).T
+      ampbin_prep = np.squeeze(ampbin_prep).mean(-1).T
+      ampbin_exec = np.squeeze(ampbin_exec).mean(-1).T
+
+      plt.figure(figsize=(18, 5.2))
+      plt.suptitle(f'Preferred Alpha phase for: {v_text}')
+      kw_plt = dict(cmap='Spectral_r', interp=.1, cblabel='Amplitude bins',
+                    vmin=0.012, vmax=0.016, colorbar=True, y=1.05, fz_title=18)
+      pp_obj.polar(ampbin_rest, vecbin, p_obj.yvec, subplot=131, title='Pre',
+                   **kw_plt)
+      pp_obj.polar(ampbin_prep, vecbin, p_obj.yvec, subplot=132,
+                   title='Movement', **kw_plt)
+      pp_obj.polar(ampbin_exec, vecbin, p_obj.yvec, subplot=133,
+                   title='Post', **kw_plt)
+      plt.tight_layout()
+      plt.show()
+
+      print(f'Identifying the preferred beta phase for: {v_text}')
+      # define the preferred phase object
+      pp_obj = PreferredPhase(f_pha=[13, 30])
+      # only extract the alpha phase
+      pp_pha = pp_obj.filter(sf, data, ftype='phase')
+      pp_pha_rest = pp_pha[..., time_rest]
+      pp_pha_prep = pp_pha[..., time_prep]
+      pp_pha_exec = pp_pha[..., time_exec]
+      # compute the preferred phase (reuse the amplitude computed above)
+      ampbin_rest, _, vecbin = pp_obj.fit(pp_pha_rest, amp_rest, n_bins=72)
+      ampbin_prep, _, vecbin = pp_obj.fit(pp_pha_prep, amp_prep, n_bins=72)
+      ampbin_exec, _, vecbin = pp_obj.fit(pp_pha_exec, amp_exec, n_bins=72)
+      # mean binned amplitude across trials
+      ampbin_rest = np.squeeze(ampbin_rest).mean(-1).T
+      ampbin_prep = np.squeeze(ampbin_prep).mean(-1).T
+      ampbin_exec = np.squeeze(ampbin_exec).mean(-1).T
+
+      plt.figure(figsize=(18, 5.2))
+      plt.suptitle(f'Preferred Beta phase for: {v_text}')
+      kw_plt = dict(cmap='Spectral_r', interp=.1, cblabel='Amplitude bins',
+                    vmin=0.012, vmax=0.016, colorbar=True, y=1.05, fz_title=18)
+      pp_obj.polar(ampbin_rest, vecbin, p_obj.yvec, subplot=131, title='Pre',
+                   **kw_plt)
+      pp_obj.polar(ampbin_prep, vecbin, p_obj.yvec, subplot=132,
+                   title='Movement', **kw_plt)
+      pp_obj.polar(ampbin_exec, vecbin, p_obj.yvec, subplot=133,
+                   title='Post', **kw_plt)
+      plt.tight_layout()
+      plt.show()
 
 if __name__ == '__main__':
+
+      # If flag_for_spectral_plots is 0 then do not print spectral and bispectral plots
+      # If flag_for_spectral_plots is 1 then print spectral and bispectral plots
+      flag_for_bispectral_plots = 1
+
+      # The sensitivity variable is used to select the start points for the
+      # accl or EMG triggered data amplitudes.
+      sensitivity = 250.0
+
+      # This tells the code that we are running data from Kazuki's motor test
+      # and it should only have 30 epochs - no more.
+      # flag = 1 Kazuki
+      # flag = 0 Other.
+      flag2 = '1'
+
       # directory_path and file extension are entered by the user
       mat_files = get_mat_files(directory_path, file_extension)
       # variable_list is a list of the variables in the mat file that are to be analyzed
-      vars = get_variable_names()
+      vars = get_variable_names(variable_list)
       combined, samp_freq = modify_var_names(vars)
-
-      # If flag_for_spectral_plots is 0 then do not print spectral and bispectral plots
-      # If flag_for_spectral_plots is 1 then print spectral and bispeactral plots
-      flag_for_spectral_plots = 0
 
       # Add a 60 Hz filter to the data
 
@@ -852,14 +954,19 @@ if __name__ == '__main__':
       for j in range(len(vars)):
             if vars[j] == 'CANALOG_IN_1___Accl':
             #if vars[j] == 'CEMG_2___02___Flx_Ext':
+            #if vars[j] == 'CEMG_2___01___Bi_Tri':
                   # Store the variable sample rate that the segments are built on
-                  sf_accl = samp_freq[vars[j]]
+                  sfreq = samp_freq[vars[j]]
+
+                  # sensitivity is the variable the determines the cutoff for the detection point
+                  # of the above variable to calculate the start of each trial
+                  # Sensitivity variable is used here
+                  print(f'Calculating the start and end times for each trial based on the {vars[j]} variable.')
                   yavg, hold0s, hold0e, ts_times, te_times, ts_samples, te_samples = \
-                        (start_end(vars[j], combined, sf_accl))
+                        (start_end(vars[j], combined, sfreq, sensitivity))
 
       # Build a dictionary of the data for the segments before, during
-      # after and for all the data  - note we are really only using all the data
-      # dictionary
+      # after and for all the data
       before_seg = {}
       during_seg = {}
       after_seg = {}
@@ -870,11 +977,14 @@ if __name__ == '__main__':
             hold2 = vars[k] + '_segmented'
             # Just for testing purposes - for plot to make data is correct
             # hold3 is the variable that is being segmented data label
-            if k == 2:
+            # k=2 is the accelerometer variable
+            # k=0 is the bi_tri variable
+            # k=1 is the flex_ext variable
+            if k == 0:
                   hold3 = vars[k] + '_segmented'
 
             all, before, during, after = segment_data_variable(combined[hold],
-                                    ts_samples, sf_accl, samp_freq[vars[k]])
+                                    ts_samples, sfreq, samp_freq[vars[k]])
 
             # Fill the dictionaries with the segmented data
             before_seg[hold2] = before
@@ -891,23 +1001,24 @@ if __name__ == '__main__':
       plt.title(f"Segmented data for first trial of: {hold3}")
       plt.show()
 
-      if flag_for_spectral_plots == 1:
+      if flag_for_bispectral_plots == 1:
             for k in range(len(vars)):
 
                   # combined variables are the long dictionaries that hold all the data from one
                   # variable across all mat files
                   # segments variables are the variables that have been chopped at the start
-                  # of the accl movement and then two seconds in front and 2 seconds behind
+                  # of the triggered movement variable and then two seconds in front and 2 seconds
+                  # behind
 
                   if (vars[k][0:7] == 'CANALOG') or (vars[k][0:4] == 'CEMG'):
                         print(f'Skipping {vars[k]}')
                   else:
                         hold = vars[k] + '_combine'
                         hold2 = vars[k] + '_segmented'
-                        x = during_seg[hold2]
-                        y = during_seg[hold2]
-                        z = during_seg[hold2]
-                        calcualte_PSD(all_seg[hold2], samp_freq[vars[k]],
+                        x = before_seg[hold2]
+                        y = before_seg[hold2]
+                        z = before_seg[hold2]
+                        calcualte_PSD(before_seg[hold2], samp_freq[vars[k]],
                                       len(ts_samples), hold2, k)
 
                         mag, phase, bic = calcualte_bispectra(x, y, z,
@@ -915,7 +1026,7 @@ if __name__ == '__main__':
                                                    len(ts_samples), hold2, k)
 
       else:
-            print('Skipping spectral plots')
+            print('Skipping spectral and bispectral plots')
 
       for k in range(len(vars)):
             hold2 = vars[k] + '_segmented'
@@ -930,7 +1041,6 @@ if __name__ == '__main__':
 
       # Place the data in the format the tensorpac needs:
       #     Array of signals of shape (n_epochs, n_times).
-      #  Will do for one value at first
 
       # Calculate the ERPAC
 
@@ -940,23 +1050,25 @@ if __name__ == '__main__':
             if (vars[k][0:7] == 'CANALOG') or (vars[k][0:4] == 'CEMG'):
                   print(f'Skipping {vars[k]}')
             else:
+                  t_epac_start = time.time()
                   hold2 = vars[k] + '_segmented'
                   noe = len(ts_samples)
-                  tp_data_array = citaf(all_seg[hold2], (noe - 1), hold2)
 
-                  # Get the time values
-                  x = []
-                  sf = samp_freq[vars[k]]
-                  for j in range(len(all_seg[hold2][k])):
-                        x.append((j / sf) - 2.0)
+                  # Convert to tensorpac format
+                  if flag2 == 1:
+                        if noe > 30:
+                              noe = 30
+                  tp_data_array = citaf(all_seg[hold2], (noe), hold2)
 
-                  sf = sf[0] * 1.0
+                  # Get the sample frequency and the time values
+                  #sfq = sf[0] * 1.0
+                  sfq = samp_freq[vars[k]][0] * 1.0
 
                   # Get the time vector - note the -2 is so we get 2 sec before, 2 sec
-                  # during and 2 sec after and they line up at zero as the start trigger.
-
-                  time = (np.arange(tp_data_array.shape[1]) / sf) - 2.0
+                  # during and 2 sec after, and they line up at zero as the start trigger.
+                  time_1 = (np.arange(tp_data_array.shape[1]) / sfq) - 2.0
 
                   # Calculate the Event Related PAC for variable vars[k]
+                  erpac_sub(tp_data_array, sfq, time_1, vars[k])
 
-                  erpac_sub(tp_data_array, sf, time, vars[k])
+                  print(f'PAC running time in seconds = {time.time() - t_epac_start}')
