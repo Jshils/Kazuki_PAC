@@ -80,6 +80,9 @@ from scipy import signal
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import neurokit2 as nk
+from scipy import signal
+from scipy.fft import fftshift
 
 from matplotlib.cbook import flatten
 from tensorpac import Pac, EventRelatedPac, PreferredPhase
@@ -107,7 +110,7 @@ def get_mat_files(directory_path, file_extension):
                   mat_files.append(file)
       return mat_files
 
-# Combined all the variables files together and get sample frequency
+# Combined all the variables files together and get sample frequency for each variable
 def combine_variables(directory_path, mat_files, variable):
       print('Combining the files to one long data stream')
       print(variable)
@@ -145,7 +148,7 @@ def get_variable_names(variable_list):
 def modify_var_names(vars):
       # Create a dictionary to hold all the combined data and then
       # another dictionary to hold the sample rate data.
-      print('Modify Variable Names - create a dictionary holding each variable name and then the data')
+      print('Modify Variable Names - creating a dictionary holding each variable name and then the data')
       combined = {}
       samp_freq = {}
 
@@ -158,18 +161,13 @@ def modify_var_names(vars):
       #print(f"samp_freq:{samp_freq}")
       return combined, samp_freq
 
-#def print_greater_than_x(data, x):
-#    # Prints numbers greater than x and their indices in a list.
-
-#    for index, number in enumerate(data):
-#        if number > x:
-#            print(f"Number: {number}, Index: {index}")
-
 
 def start_end(vars, combined, samp_freq, sensitivity):
 # Calculate the start and end times for each trial based on the trigger being
 # either the accl or EMG start point. Go 2 sec before and 2 sec after so the full
 # data will be 2 sec before, 2 second of movement, and 2 sec after.
+
+# Sensitivity is the value that the function looks for to calculate the start point of the trial
 
 # Get the average value of the accl or EMG variable
 
@@ -177,9 +175,6 @@ def start_end(vars, combined, samp_freq, sensitivity):
 #      for i in range(len(combined)):
       l = [0]
       for i in range(len(l)):
-            #print(f"vars: {vars}")
-            #print('Set time axis')
-            #print(f'combine: {vars}')
             accl = combined[vars + '_combine']
 
             # Rectify and square of values greater than 250
@@ -201,7 +196,7 @@ def start_end(vars, combined, samp_freq, sensitivity):
                         #k = k + 1
                         #print(f'k: {k}')
 
-                        j = j + int((4 * samp_freq))
+                        j = j + int((4 * samp_freq[0]))
                         if j >= len(abs_val):
                               break
                         abs_val[j] = 0.0
@@ -332,19 +327,51 @@ def start_end(vars, combined, samp_freq, sensitivity):
       print(f'len of ts_times: {len(ts_times)}')
 
 
+      # Using neurokit2
+
+      #print(f'Using neurokit2 on {vars}')
+
+      #accl = combined[vars + '_combine']
+
+      #plt.plot(accl)
+
+      #eog_signals, info = nk.eog_process(accl, sampling_rate=samp_freq[0])
+      #nk.eog_plot(eog_signals, info)
+
+      #signals, info = nk.emg_process(accl, sampling_rate=samp_freq[0])
+      #nk.emg_plot(signals, info)
+      # print(f'info {info}')
+
+
+      #emg_cleaned = nk.emg_clean(accl, sampling_rate=samp_freq[0])
+      #emg_amplitude = nk.emg_amplitude(emg_cleaned)
+      #activity, info = nk.emg_activation(emg_amplitude=emg_amplitude,
+#                                                     method="threshold")
+
+      #nk.events_plot([info["EMG_Offsets"], info["EMG_Onsets"]], emg_cleaned)
+
+
+
+
+
+
+
+
       return yavg, hold0s, hold0e, ts_times, te_times, ts_samples, te_samples
 
 
 
 def segment_data_variable(variable, accl_start_samples, sf_accl, sf):
-      # Segment the specific variable according to the start times of the accl or EMG movement
+      # Segment the specific variable according to the start times of the
+      #                  accl or EMG movement
       # Segment the data to the following:
       #     2 sec before the movement
       #     2 sec during the movement
       #     2 sec after the movement
 
-      # First convert the start times from the Accl variable to the appropriate sample points since sample rates
-      # are different between variables.
+      # First convert the start times from the Accl variable to the
+      #               appropriate sample points since sample rates
+      #                  are different between variables.
       # vst = variable start times
       #                        (Accl_Start_time)*(Variable_Sample_rate)
       #  Variable_Start_time = -------------------------------------------
@@ -368,13 +395,16 @@ def segment_data_variable(variable, accl_start_samples, sf_accl, sf):
 
 
 def add_motor_condition(y_text, fontsize=14, color='k', ax=None):
+    # The values of x_time are the center coordinates of the text on the plot
     x_times = [-1.0, 1.0, 3.0]
+    #x_times = [-2.0, 0.0, 2.0]
     x_conditions = ['Pre', 'Movement', 'Post']
     if ax is None: ax = plt.gca()  # noqa
     plt.sca(ax)
     plt.axvline(0., lw=2, color=color)
     plt.axvline(2.0, lw=2, color=color)
     for x_t, t_t in zip(x_times, x_conditions):
+        print(f'x_t {x_t}')
         plt.text(x_t, y_text, t_t, color=color, fontsize=fontsize, ha='center',
                  va='center', fontweight='bold')
     return
@@ -409,32 +439,25 @@ def get_avg_seg_variables(data, noe, sf, vars):
       plt.xlabel("Time(sec)")
       plt.ylabel("uV")
       plt.title(f"Average over segments for: {vars}")
-      add_motor_condition(0.9 * max_amplitude)
+      add_motor_condition(1.0 * max_amplitude)
       plt.show()
 
       return
 
-
-def calcualte_PSD(data, sf, noe, hold2, k):
+def calcualte_PSD(data, sf, noe, hold2, k, extra_text=''):
       # noe = Number of Epochs
-      print(f'Calculating the PSD for variable {hold2}')
+      print(f'Calculating the PSD for variable {hold2}' + extra_text)
       window_size = int(sf[0])
       nfft = window_size
       # Calculate PSD using Welch's method
       psd = np.zeros(nfft // 2 + 1)
       # Calculate the PSD and sum them
       for i in range(noe - 1): # Sum over the epochs
-            #print(f'i:{i}')
-            #print(f'Data[j][1]: {data[j][1]}')
-            #windowed_data = data[k][i:(i + window_size)] * np.hanning(window_size)  # Apply Hanning window
             n = 0
             for j in range(int(len(data[i]) / sf[0])): # Sum over the data in the epochs (i.e. if 6 sec then would do six FFTs)
-                  #windowed_data = data[i][j:(j + window_size)] * np.hanning(window_size)
-                  #print(f'n: {n}')
                   windowed_data = data[i][n:(n + window_size)] * np.hanning(window_size)
                   n = n + window_size
                   fft_result = np.fft.fft(windowed_data, n=nfft)
-                  #print(f'fft_result[1:4]: {fft_result[1:4]}')
                   psd += np.abs(fft_result[:nfft // 2 + 1]) ** 2  # Take the positive frequencies
 
       psd /= len(data[k] * noe)  # Normalize by the total length of the signal
@@ -445,12 +468,25 @@ def calcualte_PSD(data, sf, noe, hold2, k):
       plt.plot(frequency, psd)
       plt.xlabel("Frequency (Hz)")
       plt.ylabel("Power Spectral Density")
-      plt.title(f"Power Spectral Density (PSD): {hold2}")
+      plt.title(f"Power Spectral Density (PSD): {hold2} - " + extra_text)
       plt.yscale('log')
-      # plt.ylim(0, 500)
       plt.xlim(0, 100)
       plt.grid(True)
       plt.show()
+
+      return
+
+# Calculate the spectrogram
+def calcualte_spectrogram(data, sf, hold2, k, extra_text=''):
+      print(f'Calculating the spectrogram for variable {hold2}' + extra_text)
+      f, t, Sxx = signal.spectrogram(data[k], sf[0])
+      plt.pcolormesh(t, f, Sxx, shading='gouraud')
+      plt.ylabel('Frequency [Hz]')
+      plt.xlabel('Time [sec]')
+      plt.title(f"Spectrogram for: {hold2} - " + extra_text)
+      plt.ylim(0, 100)
+      plt.show()
+
       return
 
 
@@ -459,11 +495,7 @@ def line_filter(variable, sf, line):
       # Remove 60 Hz and the DC offset from the signals.
 
       # First subtract out the DC component
-      #sumt = (sum(variable))
-      #total = np.absolute(sumt)
-      #print(f'total: {total}')
-      #length = len(variable)
-      #mean = total / length
+
       variable = variable - np.mean(variable)
 
       f0 = line
@@ -701,7 +733,7 @@ def erpac_sub (data, sf, time_x, v_text):
 
       itc = ITC(data, sf, f_pha=(8, 30, 2, 0.2))
       itc.plot(times=time_x, cmap='plasma', fz_labels=15, fz_title=10)
-      add_motor_condition(18, color='white')
+      add_motor_condition(25, color='white')
       plt.suptitle(f'{v_text}')
       plt.show()
 
@@ -919,9 +951,21 @@ def erpac_sub (data, sf, time_x, v_text):
 
 if __name__ == '__main__':
 
-      # If flag_for_spectral_plots is 0 then do not print spectral and bispectral plots
-      # If flag_for_spectral_plots is 1 then print spectral and bispectral plots
-      flag_for_bispectral_plots = 1
+      # If flag_for_bispectra_plots is 0 then do not calculate the bispectral plots
+      # If flag_for_bispectral_plots is 1 then calculate and print the bispectral plots
+      flag_for_bispectral_plots = 0
+
+      # If flag_for_spectral_plots is 0 then do not calculate and print the PSD plots
+      # If flag_for_spectral_plots is 1 then calculate and print the PSD plots
+      flag_for_spectral_plots = 0
+
+      # If flag_for_spectrogram_plots is 0 then do not calculate and print the spectrogram plots
+      # If flag_for_spectrogram_plots is 1 then calculate and print the spectrogram plots
+      flag_for_spectrogram_plots = 1
+
+      # If flag_for_ERPAC is 0 then do not print the ERPAC
+      # If flag_for_ERPAC is 1 then print the ERPAC
+      flag_for_ERPAC_plots = 0
 
       # The sensitivity variable is used to select the start points for the
       # accl or EMG triggered data amplitudes.
@@ -952,9 +996,9 @@ if __name__ == '__main__':
       # Get the starting and ending times for the movements based on the accl
       # data
       for j in range(len(vars)):
-            if vars[j] == 'CANALOG_IN_1___Accl':
+            #if vars[j] == 'CANALOG_IN_1___Accl':
             #if vars[j] == 'CEMG_2___02___Flx_Ext':
-            #if vars[j] == 'CEMG_2___01___Bi_Tri':
+            if vars[j] == 'CEMG_2___01___Bi_Tri':
                   # Store the variable sample rate that the segments are built on
                   sfreq = samp_freq[vars[j]]
 
@@ -1001,32 +1045,56 @@ if __name__ == '__main__':
       plt.title(f"Segmented data for first trial of: {hold3}")
       plt.show()
 
-      if flag_for_bispectral_plots == 1:
+
+      for k in range(len(vars)):
+
+            # combined variables are the long dictionaries that hold all the data from one
+            # variable across all mat files
+            # segments variables are the variables that have been chopped at the start
+            # of the triggered movement variable and then two seconds in front and 2 seconds
+            # behind
+
+            if (vars[k][0:7] == 'CANALOG') or (vars[k][0:4] == 'CEMG'):
+                  print(f'Skipping {vars[k]}')
+            else:
+                  hold = vars[k] + '_combine'
+                  hold2 = vars[k] + '_segmented'
+                  x = before_seg[hold2]
+                  y = before_seg[hold2]
+                  z = before_seg[hold2]
+
+                  if flag_for_spectral_plots == 1:
+                        print('Before FFT Plots')
+                        calcualte_PSD(before_seg[hold2], samp_freq[vars[k]],
+                                      len(ts_samples), hold2, k, 'Before')
+                        print('During FFT Plots')
+                        calcualte_PSD(during_seg[hold2], samp_freq[vars[k]],
+                                      len(ts_samples), hold2, k, 'During')
+                        print('After FFT Plots')
+                        calcualte_PSD(after_seg[hold2], samp_freq[vars[k]],
+                                      len(ts_samples), hold2, k, 'After')
+                  else:
+                        print('Skipping PSD plots')
+
+                  if flag_for_bispectral_plots == 1:
+                        mag, phase, bic = calcualte_bispectra(x, y, z,samp_freq[vars[k]],
+                                                              len(ts_samples), hold2, k)
+
+                  else:
+                        print('Skipping bispectral plots')
+
+      if flag_for_spectrogram_plots == 1:
+
             for k in range(len(vars)):
-
-                  # combined variables are the long dictionaries that hold all the data from one
-                  # variable across all mat files
-                  # segments variables are the variables that have been chopped at the start
-                  # of the triggered movement variable and then two seconds in front and 2 seconds
-                  # behind
-
                   if (vars[k][0:7] == 'CANALOG') or (vars[k][0:4] == 'CEMG'):
                         print(f'Skipping {vars[k]}')
                   else:
                         hold = vars[k] + '_combine'
                         hold2 = vars[k] + '_segmented'
-                        x = before_seg[hold2]
-                        y = before_seg[hold2]
-                        z = before_seg[hold2]
-                        calcualte_PSD(before_seg[hold2], samp_freq[vars[k]],
-                                      len(ts_samples), hold2, k)
-
-                        mag, phase, bic = calcualte_bispectra(x, y, z,
-                                                samp_freq[vars[k]],
-                                                   len(ts_samples), hold2, k)
-
+                  calcualte_spectrogram(all_seg[hold2], samp_freq[vars[k]], hold2, k, extra_text='All')
       else:
-            print('Skipping spectral and bispectral plots')
+            print(f'Skipping spectrogram plots')
+
 
       for k in range(len(vars)):
             hold2 = vars[k] + '_segmented'
@@ -1044,31 +1112,34 @@ if __name__ == '__main__':
 
       # Calculate the ERPAC
 
-      for k in range(len(vars)):
+      if flag_for_ERPAC_plots == 1:
+            for k in range(len(vars)):
 
-            # Skip the trigger variables (accelerometer and emg)
-            if (vars[k][0:7] == 'CANALOG') or (vars[k][0:4] == 'CEMG'):
-                  print(f'Skipping {vars[k]}')
-            else:
-                  t_epac_start = time.time()
-                  hold2 = vars[k] + '_segmented'
-                  noe = len(ts_samples)
+                  # Skip the trigger variables (accelerometer and emg)
+                  if (vars[k][0:7] == 'CANALOG') or (vars[k][0:4] == 'CEMG'):
+                        print(f'Skipping {vars[k]}')
+                  else:
+                        t_epac_start = time.time()
+                        hold2 = vars[k] + '_segmented'
+                        noe = len(ts_samples)
 
-                  # Convert to tensorpac format
-                  if flag2 == 1:
-                        if noe > 30:
-                              noe = 30
-                  tp_data_array = citaf(all_seg[hold2], (noe), hold2)
+                        # Convert to tensorpac format
+                        if flag2 == 1:
+                              if noe > 30:
+                                    noe = 30
+                        tp_data_array = citaf(all_seg[hold2], (noe), hold2)
 
-                  # Get the sample frequency and the time values
-                  #sfq = sf[0] * 1.0
-                  sfq = samp_freq[vars[k]][0] * 1.0
+                        # Get the sample frequency and the time values
+                        #sfq = sf[0] * 1.0
+                        sfq = samp_freq[vars[k]][0] * 1.0
 
-                  # Get the time vector - note the -2 is so we get 2 sec before, 2 sec
-                  # during and 2 sec after, and they line up at zero as the start trigger.
-                  time_1 = (np.arange(tp_data_array.shape[1]) / sfq) - 2.0
+                        # Get the time vector - note the -2 is so we get 2 sec before, 2 sec
+                        # during and 2 sec after, and they line up at zero as the start trigger.
+                        time_1 = (np.arange(tp_data_array.shape[1]) / sfq) - 2.0
 
-                  # Calculate the Event Related PAC for variable vars[k]
-                  erpac_sub(tp_data_array, sfq, time_1, vars[k])
+                        # Calculate the Event Related PAC for variable vars[k]
+                        erpac_sub(tp_data_array, sfq, time_1, vars[k])
 
-                  print(f'PAC running time in seconds = {time.time() - t_epac_start}')
+                        print(f'PAC running time in seconds = {time.time() - t_epac_start}')
+      else:
+            print('Skipping the ERPAC Plots')
