@@ -1124,7 +1124,7 @@ if __name__ == '__main__':
 
 
       for k in range(len(vars)):
-            hold2 = vars[k] + '_segmented'
+            hold2 = vars[k] + '_segmented '
 
             # Number of epochs
             noe = len(ts_samples)
