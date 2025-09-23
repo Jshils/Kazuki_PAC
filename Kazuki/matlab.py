@@ -408,10 +408,10 @@ def get_avg_seg_variables(data, noe, sf, vars):
       total = np.zeros(len(data[1]))
 
       #total = data - np.mean(data)
-
+      result = []
       for i in range(noe - 1):
             # Sum up all the data in the various epochs
-            result = []
+            # result = []
             for j in range(len(data[i])):
                   result.append(total[j] + data[i][j])
             #total = result
@@ -1124,15 +1124,11 @@ if __name__ == '__main__':
 
 
       for k in range(len(vars)):
-            hold2 = vars[k] + '_segmented '
-
+            hold2 = vars[k] + '_segmented'
             # Number of epochs
             noe = len(ts_samples)
-            #get_avg_seg_variables(all_seg[hold2][k], noe,
-            #                      samp_freq[vars[k]], hold2)
             get_avg_seg_variables(all_seg[hold2], noe,
                             samp_freq[vars[k]], hold2)
-
 
       # Place the data in the format the tensorpac needs:
       #     Array of signals of shape (n_epochs, n_times).
