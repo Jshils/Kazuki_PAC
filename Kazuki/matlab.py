@@ -397,7 +397,7 @@ def add_motor_condition(y_text, fontsize=14, color='k', ax=None):
     plt.axvline(0., lw=2, color=color)
     plt.axvline(2.0, lw=2, color=color)
     for x_t, t_t in zip(x_times, x_conditions):
-        print(f'x_t {x_t}')
+        # print(f'x_t {x_t}')
         plt.text(x_t, y_text, t_t, color=color, fontsize=fontsize, ha='center',
                  va='center', fontweight='bold')
     return
@@ -405,22 +405,27 @@ def add_motor_condition(y_text, fontsize=14, color='k', ax=None):
 def get_avg_seg_variables(data, noe, sf, vars):
       # Calculate the average value for all the variables.
 
-      total = np.zeros(len(data[1]))
+      result = np.zeros(len(data[1]))
+      single = np.zeros(len(data[1]))
 
       #total = data - np.mean(data)
-      result = []
+      #result = []
       for i in range(noe - 1):
             # Sum up all the data in the various epochs
             # result = []
             for j in range(len(data[i])):
-                  result.append(total[j] + data[i][j])
+                  #result.append(total[j] + data[i][j])
+                  result[j] = result[j] + data[i][j]
+                  single[j] = single[j] + data[5][j]
             #total = result
       # Divide each value in the total by the number of epochs to get the average
-      result = np.divide(result, noe)
+      result = np.divide(result, (noe - 1))
+      single = np.divide(single, (noe - 1))
 
       # Find the maximum amplitude of the data for placement of the text
       # pre/movement/post in the graph
       max_amplitude = max(result)
+      max_amplitudes = max(single)
 
       x = []
       for j in range(len(result)):
@@ -433,6 +438,13 @@ def get_avg_seg_variables(data, noe, sf, vars):
       plt.ylabel("uV")
       plt.title(f"Average over segments for: {vars}")
       add_motor_condition(1.0 * max_amplitude)
+      plt.show()
+
+      plt.plot(x, single)
+      plt.xlabel("Time(sec)")
+      plt.ylabel("uV")
+      plt.title(f"Single epoch (5) from: {vars}")
+      add_motor_condition(1.0 * max_amplitudes)
       plt.show()
 
       return
@@ -977,7 +989,7 @@ if __name__ == '__main__':
 
       # If flag_for_spectral_plots is 0 then do not calculate and print the PSD plots
       # If flag_for_spectral_plots is 1 then calculate and print the PSD plots
-      flag_for_spectral_plots = 1
+      flag_for_spectral_plots = 0
 
       # If flag_for_spectrogram_plots is 0 then do not calculate and print the spectrogram plots
       # If flag_for_spectrogram_plots is 1 then calculate and print the spectrogram plots
