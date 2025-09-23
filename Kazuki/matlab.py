@@ -350,13 +350,6 @@ def start_end(vars, combined, samp_freq, sensitivity):
 
       #nk.events_plot([info["EMG_Offsets"], info["EMG_Onsets"]], emg_cleaned)
 
-
-
-
-
-
-
-
       return yavg, hold0s, hold0e, ts_times, te_times, ts_samples, te_samples
 
 
@@ -421,21 +414,21 @@ def get_avg_seg_variables(data, noe, sf, vars):
             result = []
             for j in range(len(data[i])):
                   result.append(total[j] + data[i][j])
-            total = result
+            #total = result
       # Divide each value in the total by the number of epochs to get the average
-      total = np.divide(total, noe)
+      result = np.divide(result, noe)
 
       # Find the maximum amplitude of the data for placement of the text
       # pre/movement/post in the graph
-      max_amplitude = max(total)
+      max_amplitude = max(result)
 
       x = []
-      for j in range(len(total)):
+      for j in range(len(result)):
             x.append((j / sf) - 2.0) # The -2.0 is so time starts at 2 sec before the movement.
 
       print(f'Segmented data average for: {vars}')
 
-      plt.plot(x, total)
+      plt.plot(x, result)
       plt.xlabel("Time(sec)")
       plt.ylabel("uV")
       plt.title(f"Average over segments for: {vars}")
@@ -444,17 +437,23 @@ def get_avg_seg_variables(data, noe, sf, vars):
 
       return
 
-def calcualte_PSD(data, sf, noe, hold2, k, extra_text=''):
+def calcualte_PSD(data, sf, noe, nfft, hold2, k, extra_text=''):
       # noe = Number of Epochs
       print(f'Calculating the PSD for variable {hold2}' + extra_text)
-      window_size = int(sf[0])
-      nfft = window_size
+      #window_size = int(sf[0])
+      window_size = nfft
       # Calculate PSD using Welch's method
       psd = np.zeros(nfft // 2 + 1)
       # Calculate the PSD and sum them
       for i in range(noe - 1): # Sum over the epochs
             n = 0
-            for j in range(int(len(data[i]) / sf[0])): # Sum over the data in the epochs (i.e. if 6 sec then would do six FFTs)
+            print(f'PSD Epoch #: {noe - (i + 1)}')
+            #print(f'int(len(data[i])/sf[0]): {int(len(data[i]) / sf[0])}')
+            #print(f'sf[0]: {sf[0]}')
+            #for j in range(int(len(data[i]) / sf[0])): # Sum over the data in the epochs
+            for j in range(int(len(data[i]) / nfft)):  # Sum over the data in the epochs
+                  print(f'PSD subepoch #: {j + 1}')
+                  # (i.e. if 6 sec then would do six FFTs)
                   windowed_data = data[i][n:(n + window_size)] * np.hanning(window_size)
                   n = n + window_size
                   fft_result = np.fft.fft(windowed_data, n=nfft)
@@ -473,6 +472,17 @@ def calcualte_PSD(data, sf, noe, hold2, k, extra_text=''):
       plt.xlim(0, 100)
       plt.grid(True)
       plt.show()
+
+      #f, Pxx_den = signal.periodogram(data[k], sf[0], window='hamming', nfft=256,
+      #                                scaling='spectrum')
+      #plt.semilogy(f, Pxx_den)
+      #plt.ylim([1e-7, 1e2])
+      #plt.xlabel('frequency [Hz]')
+      #plt.ylabel('PSD [V**2/Hz]')
+      #plt.xlim(0, 100)
+      #plt.yscale('log')
+      #plt.title(f"Periodogram: {hold2} - " + extra_text)
+      #plt.show()
 
       return
 
@@ -529,7 +539,7 @@ def citaf(data, noe, hold2):
 
       return tp_array
 
-def calcualte_bispectra(x, y, z, sf, noe, hold2, k):
+def calcualte_bispectra(x, y, z, sf, fft_size, noe, hold2, k):
       # noe = Number of Epochs
       # x, y, and z are the three data variables - they can all be the same or
       #   different depending on if you want to do a cross spectra
@@ -538,7 +548,8 @@ def calcualte_bispectra(x, y, z, sf, noe, hold2, k):
 
       global x_fft_result, y_fft_result, z_fft_result
       print(f'Calculating the bispectrum/bi-phase/bicoherance for variable {hold2}')
-      window_size = int(sf[0])
+      #window_size = int(sf[0])
+      window_size = fft_size
       nfft = window_size
       sample_freq = sf[0]
 
@@ -589,9 +600,12 @@ def calcualte_bispectra(x, y, z, sf, noe, hold2, k):
       for i in range(noe - 1): # Sum over the epochs
             print(f'Epoch: {noe - 1 - i}')
             n = 0
-            for j in range(int(len(x[i]) / sample_freq)): # Sum over the data in the epochs (sub-epochs)
+            # print(f'int(len(x[i]) / samp_freq {int(len(x[i]) / sample_freq)}')
+            #for j in range(int(len(x[i]) / sample_freq)): # Sum over the data in the epochs (sub-epochs)
+            for j in range(int(len(x[i]) / nfft)):  # Sum over the data in the epochs (sub-epochs)
                   # (i.e. if 6 sec then would do six FFTs)
-                  print(f'SubEpoch: {(int(len(x[i]) / sample_freq)) - j}')
+                  # print(f'j: {j}')
+                  print(f'SubEpoch: {(int(len(x[i]) / nfft)) - j}')
 
                   # Window the data using a Hanning window
                   x_windowed_data = x[i][n:(n + window_size)] * np.hanning(window_size)
@@ -604,8 +618,11 @@ def calcualte_bispectra(x, y, z, sf, noe, hold2, k):
                   y_fft_result = np.fft.fft(y_windowed_data, n=nfft)
                   z_fft_result = np.fft.fft(z_windowed_data, n=nfft)
 
-                  for m in range(int((sample_freq / 2) - 1)):
-                        for n in range(int((sample_freq / 2) - 1)):
+                  #for m in range(int((sample_freq / 2) - 1)):
+                  #      for n in range(int((sample_freq / 2) - 1)):
+
+                  for m in range(int((nfft / 2) - 1)):
+                        for n in range(int((nfft / 2) - 1)):
                               # Calculate the triple product at all frequencies to 1/2 the sample freq.
                               bisp[m, n] = bisp[m, n] + ((x_fft_result[m] *
                                           y_fft_result[n]) *
@@ -644,7 +661,10 @@ def calcualte_bispectra(x, y, z, sf, noe, hold2, k):
       plt.xlabel("Frequency 1 (Hz)")
       plt.ylabel("Frequency 2 (Hz)")
       plt.title(f"Bispectrum of: {hold2}")
-      plt.contour(frequency, frequency, bisp_mag, levels=np.linspace(0, 1e9, 50),
+      max_value = bisp_mag.max()
+      #plt.contour(frequency, frequency, bisp_mag, levels=np.linspace(0, 1e9, 50),
+      #            cmap='viridis', extend='both')
+      plt.contour(frequency, frequency, bisp_mag, levels=np.linspace(0, max_value, 50),
                   cmap='viridis', extend='both')
       plt.colorbar()
       plt.ylim(0, 80)
@@ -957,11 +977,11 @@ if __name__ == '__main__':
 
       # If flag_for_spectral_plots is 0 then do not calculate and print the PSD plots
       # If flag_for_spectral_plots is 1 then calculate and print the PSD plots
-      flag_for_spectral_plots = 0
+      flag_for_spectral_plots = 1
 
       # If flag_for_spectrogram_plots is 0 then do not calculate and print the spectrogram plots
       # If flag_for_spectrogram_plots is 1 then calculate and print the spectrogram plots
-      flag_for_spectrogram_plots = 1
+      flag_for_spectrogram_plots = 0
 
       # If flag_for_ERPAC is 0 then do not print the ERPAC
       # If flag_for_ERPAC is 1 then print the ERPAC
@@ -976,6 +996,9 @@ if __name__ == '__main__':
       # flag = 1 Kazuki
       # flag = 0 Other.
       flag2 = '1'
+
+      # This is the fft epoch length for the PSD and the bispectra
+      nfft = 1024
 
       # directory_path and file extension are entered by the user
       mat_files = get_mat_files(directory_path, file_extension)
@@ -1045,7 +1068,6 @@ if __name__ == '__main__':
       plt.title(f"Segmented data for first trial of: {hold3}")
       plt.show()
 
-
       for k in range(len(vars)):
 
             # combined variables are the long dictionaries that hold all the data from one
@@ -1059,26 +1081,31 @@ if __name__ == '__main__':
             else:
                   hold = vars[k] + '_combine'
                   hold2 = vars[k] + '_segmented'
-                  x = before_seg[hold2]
-                  y = before_seg[hold2]
-                  z = before_seg[hold2]
+                  x = after_seg[hold2]
+                  y = after_seg[hold2]
+                  z = after_seg[hold2]
 
                   if flag_for_spectral_plots == 1:
+                        t_spect_start = time.time()
                         print('Before FFT Plots')
                         calcualte_PSD(before_seg[hold2], samp_freq[vars[k]],
-                                      len(ts_samples), hold2, k, 'Before')
+                                      len(ts_samples), nfft, hold2, k, 'Before')
                         print('During FFT Plots')
                         calcualte_PSD(during_seg[hold2], samp_freq[vars[k]],
-                                      len(ts_samples), hold2, k, 'During')
+                                      len(ts_samples), nfft, hold2, k, 'During')
                         print('After FFT Plots')
                         calcualte_PSD(after_seg[hold2], samp_freq[vars[k]],
-                                      len(ts_samples), hold2, k, 'After')
+                                      len(ts_samples), nfft, hold2, k, 'After')
+                        print(f'Spectral running time in seconds = {time.time() - t_spect_start}')
                   else:
                         print('Skipping PSD plots')
 
                   if flag_for_bispectral_plots == 1:
+                        t_bis_start = time.time()
                         mag, phase, bic = calcualte_bispectra(x, y, z,samp_freq[vars[k]],
-                                                              len(ts_samples), hold2, k)
+                                                              nfft, len(ts_samples), hold2, k)
+
+                        print(f'Bispectral running time in seconds = {time.time() - t_bis_start}')
 
                   else:
                         print('Skipping bispectral plots')
