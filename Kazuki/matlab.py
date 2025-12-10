@@ -68,37 +68,28 @@
 #     te_times:         This is a vector of the end of the movement     #
 #           times from the start end function.                          #
 
-
-
-import math
-from operator import truediv
-
 import time
 
 import scipy.io as sio
-from scipy import signal
+# from scipy import signal
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-import neurokit2 as nk
+# import neurokit2 as nk
 from scipy import signal
-from scipy.fft import fftshift
+# from scipy.fft import fftshift
 
-from matplotlib.cbook import flatten
+# from matplotlib.cbook import flatten
 from tensorpac import Pac, EventRelatedPac, PreferredPhase
 from tensorpac.utils import PeakLockedTF, PSD, ITC, BinAmplitude
 
+# Wavelet analysis
+# import seaborn as sns
+# import scaleogram as scg
+# import pywt
+
 
 # Get a list of all the mat files in the directory path
-
-# directory_path = input(r"Input a directory path:")
-directory_path = r'C:\Users\biost\Desktop\Desktop 05212024\Kazuki Data\Gaubatz_Michael\Gaubatz_LBrain_RBody'
-
-# file_extension = input(r"Input a file extension (.xxx): ")
-file_extension = '.mat'
-
-#variable_list = input(r'Enter the variable list file (*.txt)')
-variable_list = 'v.txt'
 
 # Get all the mat file names so they can be combined
 def get_mat_files(directory_path, file_extension):
@@ -174,10 +165,13 @@ def start_end(vars, combined, samp_freq, sensitivity):
       # accl, sf = combine_variables(directory_path, mat_files, variable)
 #      for i in range(len(combined)):
       l = [0]
+
+      print(f'178 range(len(l)): {range(len(l))}')
+
       for i in range(len(l)):
             accl = combined[vars + '_combine']
 
-            # Rectify and square of values greater than 250
+            # Rectify and square of values greater than sensitivity
             print(f"Rectify and Normalizing {vars} data.")
 
             abs_val = np.absolute(accl)
@@ -203,11 +197,11 @@ def start_end(vars, combined, samp_freq, sensitivity):
                   else:
                         abs_val[j] = 0.0
                         j = j + 1
-
-            while j < len(abs_val):
-                  if abs_val[j] < 100000.0:
-                        abs_val[j] = 0.0
-                  j = j + 1
+            #print(f'j line 206: {j}')
+            #while j < len(abs_val):
+            #      if abs_val[j] < 100000.0:
+            #            abs_val[j] = 0.0
+            #      j = j + 1
 
 
 
@@ -260,6 +254,20 @@ def start_end(vars, combined, samp_freq, sensitivity):
             plt.subplot(313)
             plt.plot(x1, abs_val_hold)
             plt.show()
+
+            # Take the derivative of the function
+
+            #print(f'Calculating derivative')
+
+            #dydx = np.gradient(abs_val_hold, x1)
+
+            #plt.plot(x1, dydx, 'o--', label='dydx')
+            #plt.plot(x1, abs_val_hold, 'o--', label='abs_val_mean')
+            #plt.legend()
+            #plt.show()
+
+
+
 
             # Plot accl (which is either the accl or EMG data depending on what is being
             # used as the trigger in the time and frequency domains
@@ -474,9 +482,25 @@ def calcualte_PSD(data, sf, noe, nfft, hold2, k, extra_text=''):
       psd /= len(data[k] * noe)  # Normalize by the total length of the signal
       frequency = np.fft.fftfreq(nfft, 1 / sf)[:nfft // 2 + 1]
 
+      indices = np.where(frequency == 40)
+
+      print(f'Frequency of index 40: {frequency[40]}')
+      print(f'40 Hz index: {indices[0]}')
+
+      # Polynomial fit to the data
+
+      coefficients = np.polyfit(frequency, psd, 7)
+      polynomial_function = np.poly1d(coefficients)
+      y_fit = polynomial_function(frequency)
+      subtraction_psd = psd - y_fit
+
+
       # Plot the PSD
       plt.figure(figsize=(10, 6))
-      plt.plot(frequency, psd)
+      plt.plot(frequency, psd, color='blue')
+      #plt.plot(frequency, y_fit, color='red')
+      #plt.plot(frequency, subtraction_psd, color='green')
+      #plt.plot(np.polyval(coefficients, frequency), color='red')
       plt.xlabel("Frequency (Hz)")
       plt.ylabel("Power Spectral Density")
       plt.title(f"Power Spectral Density (PSD): {hold2} - " + extra_text)
@@ -499,7 +523,7 @@ def calcualte_PSD(data, sf, noe, nfft, hold2, k, extra_text=''):
       return
 
 # Calculate the spectrogram
-def calcualte_spectrogram(data, sf, hold2, k, extra_text=''):
+def calculate_spectrogram(data, sf, hold2, k, extra_text=''):
       print(f'Calculating the spectrogram for variable {hold2}' + extra_text)
       f, t, Sxx = signal.spectrogram(data[k], sf[0])
       plt.pcolormesh(t, f, Sxx, shading='gouraud')
@@ -523,8 +547,8 @@ def line_filter(variable, sf, line):
       f0 = line
       Q = 20.0
       b, a = signal.iirnotch(f0, Q, sf)
-      filtered_data = signal.filtfilt(b, a, variable)
-      return filtered_data
+      filtered_data1 = signal.filtfilt(b, a, variable)
+      return filtered_data1
 
 
 def citaf(data, noe, hold2):
@@ -739,6 +763,8 @@ def erpac_sub (data, sf, time_x, v_text):
       ###############################################################################
       # Compute the ERPAC using the two implemented methods and plot it
       ###############################################################################
+
+
 
       print(f'Plotting ERPAC for variable: {v_text}')
 
@@ -983,6 +1009,15 @@ def erpac_sub (data, sf, time_x, v_text):
 
 if __name__ == '__main__':
 
+      # directory_path = input(r"Input a directory path:")
+      directory_path = r'C:\Users\biost\Desktop\Desktop 05212024\Kazuki Data\Rojas\Rojas_RBrain_LBody'
+
+      # file_extension = input(r"Input a file extension (.xxx): ")
+      file_extension = '.mat'
+
+      # variable_list = input(r'Enter the variable list file (*.txt)')
+      variable_list = 'v.txt'
+
       # If flag_for_bispectra_plots is 0 then do not calculate the bispectral plots
       # If flag_for_bispectral_plots is 1 then calculate and print the bispectral plots
       flag_for_bispectral_plots = 0
@@ -997,11 +1032,11 @@ if __name__ == '__main__':
 
       # If flag_for_ERPAC is 0 then do not print the ERPAC
       # If flag_for_ERPAC is 1 then print the ERPAC
-      flag_for_ERPAC_plots = 0
+      flag_for_ERPAC_plots = 1
 
       # The sensitivity variable is used to select the start points for the
       # accl or EMG triggered data amplitudes.
-      sensitivity = 250.0
+      sensitivity = 50.0
 
       # This tells the code that we are running data from Kazuki's motor test
       # and it should only have 30 epochs - no more.
@@ -1026,14 +1061,17 @@ if __name__ == '__main__':
             variable = combined[vars[k] + '_combine']
             filtered_data = line_filter(variable, sf[0], 60)
 
+            # Add in to remove 60Hz artifact
             combined[vars[k] + '_combine'] = filtered_data
+
+            #print(f'size of array filtered data{filtered_data.shape}')
 
       # Get the starting and ending times for the movements based on the accl
       # data
       for j in range(len(vars)):
-            #if vars[j] == 'CANALOG_IN_1___Accl':
+            if vars[j] == 'CANALOG_IN_1___Accl':
             #if vars[j] == 'CEMG_2___02___Flx_Ext':
-            if vars[j] == 'CEMG_2___01___Bi_Tri':
+            #if vars[j] == 'CEMG_2___01___Bi_Tri':
                   # Store the variable sample rate that the segments are built on
                   sfreq = samp_freq[vars[j]]
 
@@ -1130,7 +1168,7 @@ if __name__ == '__main__':
                   else:
                         hold = vars[k] + '_combine'
                         hold2 = vars[k] + '_segmented'
-                  calcualte_spectrogram(all_seg[hold2], samp_freq[vars[k]], hold2, k, extra_text='All')
+                  calculate_spectrogram(all_seg[hold2], samp_freq[vars[k]], hold2, k, extra_text='All')
       else:
             print(f'Skipping spectrogram plots')
 
